@@ -144,6 +144,7 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
+        // 1. Ambil dan tampilkan data game dari API
         axios.get('http://localhost:8000/api/games')
             .then(response => {
                 const container = document.getElementById('games-container');
@@ -159,6 +160,11 @@
 
                 games.forEach(game => {
                     const initials = game.title ? game.title.substring(0, 2).toUpperCase() : 'GM';
+                    
+                    // Amankan perhitungan review agar tidak NaN
+                    const totalReview = game.total_review || 0;
+                    const totalScore = game.total_score || 0;
+                    const averageRating = totalReview > 0 ? (totalScore / totalReview).toFixed(1) : '0.0';
 
                     const cardHtml = `
                         <div class="col-md-4 mb-4">
@@ -174,7 +180,7 @@
 
                                     <ul class="list-group list-group-unbordered mb-3"> 
                                         <li class="list-group-item">
-                                            <b>Total Review</b> <a class="float-right text-dark">${game.total_score/game.total_review}</a>
+                                            <b>Total Review</b> <a class="float-right text-dark">${totalReview} Review (${averageRating} 🌟)</a>
                                         </li>
                                     </ul>
 
@@ -206,27 +212,22 @@
                     container.insertAdjacentHTML('beforeend', cardHtml);
                 });
 
-                // 1. Event listener untuk tombol Submit Review (Membuka Modal)
+                // Event listener untuk tombol Submit Review (Membuka Modal)
                 document.querySelectorAll('.open-review-modal').forEach(button => {
                     button.addEventListener('click', function () {
                         const gameId = this.getAttribute('data-id');
                         const gameTitle = this.getAttribute('data-title');
 
                         document.getElementById('modal-game-title').innerText = gameTitle;
-
                         const form = document.getElementById('reviewForm');
-                        
-                        // Simpan gameId sebagai atribut di form agar bisa dibaca saat radio dipilih
                         form.setAttribute('data-game-id', gameId);
 
-                        // Reset pilihan radio button
                         document.querySelectorAll('.review-radio').forEach(radio => radio.checked = false);
-
                         $('#reviewModal').modal('show');
                     });
                 });
 
-                // 2. Event listener untuk tombol View Detail (Membuka Modal Detail)
+                // Event listener untuk tombol View Detail
                 document.querySelectorAll('.open-detail-modal').forEach(button => {
                     button.addEventListener('click', function () {
                         document.getElementById('detail-game-title').innerText = this.getAttribute('data-title');
@@ -238,15 +239,13 @@
                     });
                 });
  
+                // Event listener pilihan rating review
                 document.querySelectorAll('.review-radio').forEach(radio => {
                     radio.addEventListener('change', function () {
                         const ratingValue = this.value;
-                        
-                        // Ambil gameId yang disimpan di form action atau simpan di atribut form saat tombol modal dibuka
                         const form = document.getElementById('reviewForm');
-                        const gameId = form.getAttribute('data-game-id'); // Kita ambil dari atribut game-id
+                        const gameId = form.getAttribute('data-game-id');
 
-                        // Tampilkan indikator loading atau langsung proses kirim via Axios
                         axios.post('http://localhost:8000/api/reviews', {
                             game_id: gameId,
                             score: ratingValue
@@ -254,54 +253,17 @@
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Accept': 'application/json'
-                                // Jika API Anda membutuhkan Sanctum / Bearer Token, tambahkan Authorization di sini
                             }
                         })
                         .then(response => {
-                            // Tutup modal setelah berhasil
                             $('#reviewModal').modal('hide');
-                            
-                            // Berikan feedback sukses (bisa menggunakan alert, toast, atau reload halaman secara lembut)
                             alert('Review berhasil dikirim!');
-                            location.reload(); // Refresh halaman untuk memperbarui data
+                            location.reload();
                         })
                         .catch(error => {
                             console.error('Gagal mengirim review:', error);
                             alert('Terjadi kesalahan saat mengirim review. Periksa console.');
                         });
-                    });
-                });
-                
-                document.getElementById('createGameForm').addEventListener('submit', function (e) {
-                    e.preventDefault(); // Mencegah reload halaman secara default
-
-                    const formData = {
-                        title: document.getElementById('gameTitle').value,
-                        author: document.getElementById('gameAuthor').value,
-                        release: document.getElementById('gameRelease').value,
-                        detail: document.getElementById('gameDetail').value
-                    };
-
-                    const btnSave = document.getElementById('btnSaveGame');
-                    btnSave.disabled = true;
-                    btnSave.innerText = 'Menyimpan...';
-
-                    axios.post('http://localhost:8000/api/games', formData, {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        }
-                    })
-                    .then(response => {
-                        $('#createGameModal').modal('hide');
-                        alert('Game baru berhasil ditambahkan!');
-                        location.reload(); // Refresh halaman untuk menampilkan game baru
-                    })
-                    .catch(error => {
-                        console.error('Gagal menambahkan game:', error);
-                        alert('Gagal menambahkan game. Pastikan semua field terisi dengan benar.');
-                        btnSave.disabled = false;
-                        btnSave.innerText = 'Simpan Game';
                     });
                 });
 
@@ -317,6 +279,46 @@
                     `;
                 }
             });
+
+        // 2. Event listener untuk Submit Form Create Game (Dipindah ke luar agar aman dan terikat sejak awal)
+        const createForm = document.getElementById('createGameForm');
+        if (createForm) {
+            createForm.addEventListener('submit', function (e) {
+                e.preventDefault(); // Mencegah reload halaman secara total
+
+                const formData = {
+                    title: document.getElementById('gameTitle').value,
+                    author: document.getElementById('gameAuthor').value,
+                    release: document.getElementById('gameRelease').value,
+                    detail: document.getElementById('gameDetail').value,
+                    total_review:0,
+                    total_score:0
+
+                };
+
+                const btnSave = document.getElementById('btnSaveGame');
+                btnSave.disabled = true;
+                btnSave.innerText = 'Menyimpan...';
+
+                axios.post('http://localhost:8000/api/games', formData, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => {
+                    $('#createGameModal').modal('hide');
+                    alert('Game baru berhasil ditambahkan!');
+                    location.reload(); // Refresh halaman untuk menampilkan data baru
+                })
+                .catch(error => {
+                    console.error('Gagal menambahkan game:', error);
+                    alert('Gagal menambahkan game. Pastikan semua field terisi dengan benar.');
+                    btnSave.disabled = false;
+                    btnSave.innerText = 'Simpan Game';
+                });
+            });
+        }
     });
 </script>
 @stop

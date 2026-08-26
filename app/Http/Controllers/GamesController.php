@@ -26,7 +26,6 @@ class GamesController extends Controller
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
         ]);
-
         return Game::create($request->all());
     }
 
